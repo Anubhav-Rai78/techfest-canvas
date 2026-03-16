@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>Tech Fest --- Register</title>
+<style>
+body { font-family: Arial, sans-serif; background: #0D1B2A; color: #fff;
+display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+.box { background: #1a2a3a; padding: 40px; border-radius: 12px; width: 100%; max-width: 420px; }
+h1 { color: #90CAF9; margin-bottom: 8px; }
+p { color: #78909C; margin-bottom: 28px; font-size: 14px; }
+input { width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px;
+border: 1px solid #2a3a4a; background: #0D1B2A; color: #fff;
+font-size: 16px; box-sizing: border-box; }
+button { width: 100%; padding: 14px; background: #1565C0; color: #fff;
+border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+button:hover { background: #1976D2; }
+.result { margin-top: 24px; padding: 20px; background: #0a2a0a; border-radius: 8px;
+border: 1px solid #43A047; display: none; text-align: center; }
+.code { font-size: 32px; font-weight: bold; color: #A5D6A7; letter-spacing: 4px; margin: 12px 0; }
+.error { margin-top: 16px; color: #EF9A9A; font-size: 14px; display: none; }
+</style>
+</head>
+<body>
+<div class='box'>
+<h1>🎨 Tech Fest Canvas</h1>
+<p>Register to get your unique Fest ID. Use it to join the Pixel Canvas game.</p>
+<input id='name' type='text' placeholder='Your Full Name' />
+<input id='phone' type='tel' placeholder='Phone Number' />
+<input id='college' type='text' placeholder='College Name' />
+<button onclick='register()'>Register & Get My Fest ID</button>
+<div class='error' id='error'></div>
+<div class='result' id='result'>
+<div>Registration Successful! 🎉</div>
+<div class='code' id='code'></div>
+<div style='color:#78909C; font-size:13px'>Screenshot or write down your Fest ID.<br>You will need it to join the canvas.</div>
+</div>
+</div>
+<script>
+const API = 'https://techfest-canvas.onrender.com';
+
+async function register() {
+const name = document.getElementById('name').value.trim();
+const phone = document.getElementById('phone').value.trim();
+const college = document.getElementById('college').value.trim();
+if (!name || !phone || !college) { showError('Please fill in all fields.'); return; }
+try {
+const res = await fetch(API + '/register', {
+method: 'POST', headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({ name, phone, college })
+});
+const data = await res.json();
+document.getElementById('code').textContent = data.fest_code;
+document.getElementById('result').style.display = 'block';
+document.getElementById('error').style.display = 'none';
+} catch(e) { showError('Server error. Please try again.'); }
+}
+
+function showError(msg) {
+const el = document.getElementById('error');
+el.textContent = msg; el.style.display = 'block';
+}
+</script>
+</body></html>

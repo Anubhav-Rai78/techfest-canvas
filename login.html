@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>Tech Fest --- Enter Canvas</title>
+<style>
+body { font-family: Arial, sans-serif; background: #0D1B2A; color: #fff;
+display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+.box { background: #1a2a3a; padding: 40px; border-radius: 12px; width: 100%; max-width: 400px; }
+h1 { color: #90CAF9; }
+p { color: #78909C; font-size: 14px; margin-bottom: 28px; }
+input { width: 100%; padding: 14px; border-radius: 8px; border: 1px solid #2a3a4a;
+background: #0D1B2A; color: #fff; font-size: 20px; letter-spacing: 3px;
+text-align: center; text-transform: uppercase; box-sizing: border-box; }
+button { width: 100%; padding: 14px; margin-top: 16px; background: #1565C0;
+color: #fff; border: none; border-radius: 8px; font-size: 16px;
+cursor: pointer; font-weight: bold; }
+button:hover { background: #1976D2; }
+.error { margin-top: 16px; color: #EF9A9A; font-size: 14px; display: none; text-align: center; }
+</style>
+</head>
+<body>
+<div class='box'>
+<h1>🎨 Enter Canvas</h1>
+<p>Enter your Fest ID to join the Pixel Canvas game. You received this when you registered.</p>
+<input id='code' type='text' placeholder='PXF-XXXXXX' maxlength='10' />
+<button onclick='enter()'>Enter Canvas</button>
+<div class='error' id='error'></div>
+</div>
+<script>
+const API = 'https://techfest-canvas.onrender.com';
+const CANVAS_URL = 'https://your-pxls-railway-url.up.railway.app';
+
+async function enter() {
+const code = document.getElementById('code').value.trim().toUpperCase();
+if (!code) { showError('Please enter your Fest ID.'); return; }
+try {
+const res = await fetch(API + '/login', {
+method: 'POST', headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({ fest_code: code })
+});
+if (res.status === 401) { showError('Invalid Fest ID. Please check and try again.'); return; }
+const data = await res.json();
+sessionStorage.setItem('festUser', JSON.stringify({ name: data.name, code: data.fest_code }));
+window.location.href = CANVAS_URL;
+} catch(e) { showError('Server error. Please try again.'); }
+}
+
+function showError(msg) {
+const el = document.getElementById('error');
+el.textContent = msg; el.style.display = 'block';
+}
+</script>
+</body></html>
