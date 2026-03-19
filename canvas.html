@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tech Fest Canvas 🎨</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #13131a;
+    --border: #2a2a3a;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --text: #e8e8f0;
+    --muted: #666680;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #topbar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  #topbar h1 {
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  #user-badge {
+    background: #1a1a2e;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  }
+
+  #cooldown-display {
+    margin-left: auto;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: #ff6584;
+    white-space: nowrap;
+    min-width: 80px;
+    text-align: right;
+  }
+
+  #cooldown-display.ready { color: #00ff88; }
+
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #canvas-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    cursor: crosshair;
+    background: #05050a;
+  }
+
+  #canvas {
+    position: absolute;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    transform-origin: 0 0;
+  }
+
+  #hover-info {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(10,10,15,0.85);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  #zoom-controls {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .zoom-btn {
+    width: 32px;
+    height: 32px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .zoom-btn:hover { background: var(--border); }
+
+  #sidebar {
+    width: 60px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 6px;
+    gap: 5px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  #sidebar-label {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    font-family: monospace;
+  }
+
+  .color-swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s, border-color 0.1s;
+    flex-shrink: 0;
+  }
+
+  .color-swatch:hover { transform: scale(1.1); }
+  .color-swatch.selected {
+    border-color: white;
+    transform: scale(1.15);
+    box-shadow: 0 0 8px rgba(255,255,255,0.4);
+  }
+
+  /* LOGIN OVERLAY */
+  #login-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5,5,10,0.97);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  #login-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px 32px;
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+  }
+
+  #login-box h2 {
+    font-family: monospace;
+    font-size: 20px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  #login-box p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  #fest-code-input {
+    width: 100%;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: monospace;
+    font-size: 22px;
+    letter-spacing: 4px;
+    text-align: center;
+    text-transform: uppercase;
+    outline: none;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+
+  #fest-code-input:focus { border-color: var(--accent); }
+
+  #enter-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  #enter-btn:hover { background: #5a52e0; }
+  #enter-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  #login-error {
+    margin-top: 12px;
+    color: var(--accent2);
+    font-size: 13px;
+    display: none;
+  }
+
+  /* LOADING */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    font-family: monospace;
+    color: var(--muted);
+    font-size: 14px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* TOAST */
+  #toast {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 200;
+    white-space: nowrap;
+  }
+
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  @media (max-width: 500px) {
+    #sidebar { width: 50px; padding: 8px 4px; }
+    .color-swatch { width: 34px; height: 34px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <span>Loading canvas...</span>
+</div>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="display:none;">
+  <div id="login-box">
+    <h2>🎨 Tech Fest Canvas</h2>
+    <p>Enter your Fest ID to join the collaborative pixel canvas!</p>
+    <input id="fest-code-input" type="text" placeholder="PXF-XXXXXX" maxlength="10" autocomplete="off" />
+    <button id="enter-btn" onclick="doLogin()">Enter Canvas</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- MAIN UI -->
+<div id="topbar">
+  <h1>🎨 TECHFEST CANVAS</h1>
+  <div id="user-badge">Not logged in</div>
+  <div id="cooldown-display" class="ready">✓ READY</div>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="hover-info">x: — y: —</div>
+    <div id="zoom-controls">
+      <button class="zoom-btn" onclick="zoom(1.5)">+</button>
+      <button class="zoom-btn" onclick="zoom(1/1.5)">−</button>
+      <button class="zoom-btn" onclick="resetZoom()" style="font-size:11px">⌂</button>
+    </div>
+  </div>
+  <div id="sidebar">
+    <div id="sidebar-label">Color</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──
+const SUPABASE_URL = 'https://pcrwdirpqzqtoqjuqdmq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kPlxSvcRRkfXkJNt7lom0A_5NtXRAYE';
+const FASTAPI_URL  = 'https://techfest-canvas.onrender.com';
+const WIDTH        = 200;
+const HEIGHT       = 200;
+const COOLDOWN_MS  = 30000;
+
+const PALETTE = [
+  '#ffffff','#000000','#808080','#c0c0c0',
+  '#ff0000','#800000','#ff6600','#ff8c00',
+  '#ffff00','#808000','#00ff00','#008000',
+  '#00ffff','#008080','#0000ff','#000080',
+  '#ff00ff','#800080','#ff69b4','#ff1493',
+  '#ffd700','#7cfc00','#00fa9a','#00bfff',
+  '#1e90ff','#9370db','#4b0082','#ff4500',
+  '#2f4f4f','#8b4513','#228b22','#dc143c'
+];
+
+// ── STATE ──
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let festCode = null;
+let userName = null;
+let selectedColor = 0;
+let cooldownEnd = 0;
+let cooldownInterval = null;
+let scale = 3;
+let offsetX = 0, offsetY = 0;
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+
+const canvasEl = document.getElementById('canvas');
+const ctx = canvasEl.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+
+canvasEl.width  = WIDTH;
+canvasEl.height = HEIGHT;
+
+// Fill white initially
+ctx.fillStyle = '#ffffff';
+ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+// ── BOOT ──
+window.addEventListener('load', async () => {
+  await loadCanvas();
+  document.getElementById('loading').style.display = 'none';
+
+  // Check if coming from login.html via sessionStorage
+  const stored = sessionStorage.getItem('festUser');
+  if (stored) {
+    try {
+      const u = JSON.parse(stored);
+      festCode = u.code;
+      userName = u.name;
+      document.getElementById('user-badge').textContent = '👤 ' + userName;
+      subscribeRealtime();
+      return;
+    } catch(e) {}
+  }
+
+  document.getElementById('login-overlay').style.display = 'flex';
+  buildPalette();
+  subscribeRealtime();
+});
+
+// ── LOAD CANVAS FROM SUPABASE ──
+async function loadCanvas() {
+  const { data, error } = await sb.from('pixels').select('x,y,color');
+  if (error) { console.error(error); return; }
+  if (data) {
+    for (const px of data) {
+      ctx.fillStyle = px.color;
+      ctx.fillRect(px.x, px.y, 1, 1);
+    }
+  }
+  resetZoom();
+  buildPalette();
+}
+
+// ── REALTIME SUBSCRIPTION ──
+function subscribeRealtime() {
+  sb.channel('pixels')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'pixels'
+    }, (payload) => {
+      if (payload.new && payload.new.x !== undefined) {
+        ctx.fillStyle = payload.new.color;
+        ctx.fillRect(payload.new.x, payload.new.y, 1, 1);
+      }
+    })
+    .subscribe();
+}
+
+// ── LOGIN ──
+document.getElementById('fest-code-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+async function doLogin() {
+  const code = document.getElementById('fest-code-input').value.trim().toUpperCase();
+  if (!code) return showLoginError('Please enter your Fest ID');
+
+  const btn = document.getElementById('enter-btn');
+  btn.textContent = 'Checking...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(FASTAPI_URL + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fest_code: code })
+    });
+
+    if (res.status === 401) {
+      showLoginError('Invalid Fest ID. Please check and try again.');
+      btn.textContent = 'Enter Canvas';
+      btn.disabled = false;
+      return;
+    }
+
+    const data = await res.json();
+    festCode = data.fest_code;
+    userName = data.name;
+    document.getElementById('user-badge').textContent = '👤 ' + userName;
+    document.getElementById('login-overlay').style.display = 'none';
+
+  } catch(e) {
+    showLoginError('Could not connect to server. Try again.');
+    btn.textContent = 'Enter Canvas';
+    btn.disabled = false;
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ── PALETTE ──
+function buildPalette() {
+  const sidebar = document.getElementById('sidebar');
+  // Remove existing swatches
+  sidebar.querySelectorAll('.color-swatch').forEach(s => s.remove());
+
+  PALETTE.forEach((color, i) => {
+    const swatch = document.createElement('div');
+    swatch.className = 'color-swatch' + (i === selectedColor ? ' selected' : '');
+    swatch.style.background = color;
+    swatch.title = color;
+    swatch.onclick = () => selectColor(i);
+    sidebar.appendChild(swatch);
+  });
+}
+
+function selectColor(index) {
+  selectedColor = index;
+  document.querySelectorAll('.color-swatch').forEach((s, i) => {
+    s.classList.toggle('selected', i === index);
+  });
+}
+
+// ── PLACE PIXEL ──
+async function placePixel(x, y) {
+  if (!festCode) { showToast('Please log in first!'); return; }
+  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
+
+  const now = Date.now();
+  if (now < cooldownEnd) {
+    showToast(`Wait ${Math.ceil((cooldownEnd - now) / 1000)}s before placing again`);
+    return;
+  }
+
+  const color = PALETTE[selectedColor];
+
+  // Optimistic update
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 1, 1);
+
+  // Check cooldown in Supabase (via participants table)
+  const { data: participant } = await sb
+    .from('participants')
+    .select('last_pixel_at')
+    .eq('fest_code', festCode)
+    .single();
+
+  if (participant && participant.last_pixel_at) {
+    const lastPlace = new Date(participant.last_pixel_at).getTime();
+    const remaining = COOLDOWN_MS - (now - lastPlace);
+    if (remaining > 0) {
+      // Revert optimistic update — reload that pixel
+      const { data: existing } = await sb.from('pixels').select('color').eq('x', x).eq('y', y).single();
+      ctx.fillStyle = existing ? existing.color : '#ffffff';
+      ctx.fillRect(x, y, 1, 1);
+      startCooldown(remaining);
+      showToast(`Wait ${Math.ceil(remaining / 1000)}s before placing again`);
+      return;
+    }
+  }
+
+  // Save pixel to Supabase
+  await sb.from('pixels').upsert({ x, y, color, placed_by: festCode }, { onConflict: 'x,y' });
+
+  // Update last_pixel_at in participants
+  await sb.from('participants').update({ last_pixel_at: new Date().toISOString() }).eq('fest_code', festCode);
+
+  startCooldown(COOLDOWN_MS);
+}
+
+// ── COOLDOWN DISPLAY ──
+function startCooldown(ms) {
+  cooldownEnd = Date.now() + ms;
+  const display = document.getElementById('cooldown-display');
+  if (cooldownInterval) clearInterval(cooldownInterval);
+  cooldownInterval = setInterval(() => {
+    const remaining = cooldownEnd - Date.now();
+    if (remaining <= 0) {
+      display.textContent = '✓ READY';
+      display.className = 'ready';
+      clearInterval(cooldownInterval);
+    } else {
+      display.textContent = `⏱ ${Math.ceil(remaining / 1000)}s`;
+      display.className = '';
+    }
+  }, 100);
+}
+
+// ── CANVAS INTERACTION ──
+function getCanvasPos(clientX, clientY) {
+  const rect = wrap.getBoundingClientRect();
+  return {
+    x: Math.floor((clientX - rect.left - offsetX) / scale),
+    y: Math.floor((clientY - rect.top  - offsetY) / scale)
+  };
+}
+
+wrap.addEventListener('mousedown', (e) => {
+  isDragging = false;
+  dragStart = { x: e.clientX - offsetX, y: e.clientY - offsetY };
+});
+
+wrap.addEventListener('mousemove', (e) => {
+  const pos = getCanvasPos(e.clientX, e.clientY);
+  document.getElementById('hover-info').textContent = `x: ${pos.x}  y: ${pos.y}`;
+  if (e.buttons === 1) {
+    const dx = e.clientX - dragStart.x - offsetX;
+    const dy = e.clientY - dragStart.y - offsetY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isDragging = true;
+    offsetX = e.clientX - dragStart.x;
+    offsetY = e.clientY - dragStart.y;
+    updateTransform();
+  }
+});
+
+wrap.addEventListener('mouseup', (e) => {
+  if (!isDragging) {
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    placePixel(pos.x, pos.y);
+  }
+  isDragging = false;
+});
+
+wrap.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  const rect = wrap.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  offsetX = mx - (mx - offsetX) * factor;
+  offsetY = my - (my - offsetY) * factor;
+  scale = Math.max(1, Math.min(40, scale * factor));
+  updateTransform();
+}, { passive: false });
+
+// Touch
+let lastTouchDist = 0;
+wrap.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) {
+    dragStart = { x: e.touches[0].clientX - offsetX, y: e.touches[0].clientY - offsetY };
+    isDragging = false;
+  } else if (e.touches.length === 2) {
+    lastTouchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+}, { passive: true });
+
+wrap.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    const dx = e.touches[0].clientX - dragStart.x - offsetX;
+    const dy = e.touches[0].clientY - dragStart.y - offsetY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isDragging = true;
+    offsetX = e.touches[0].clientX - dragStart.x;
+    offsetY = e.touches[0].clientY - dragStart.y;
+    updateTransform();
+  } else if (e.touches.length === 2) {
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    scale = Math.max(1, Math.min(40, scale * dist / lastTouchDist));
+    lastTouchDist = dist;
+    updateTransform();
+  }
+}, { passive: false });
+
+wrap.addEventListener('touchend', (e) => {
+  if (!isDragging && e.changedTouches.length === 1) {
+    const t = e.changedTouches[0];
+    const pos = getCanvasPos(t.clientX, t.clientY);
+    placePixel(pos.x, pos.y);
+  }
+  isDragging = false;
+}, { passive: true });
+
+function updateTransform() {
+  canvasEl.style.transform = `translate(${offsetX}px,${offsetY}px) scale(${scale})`;
+}
+
+function zoom(factor) {
+  const rect = wrap.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
+  offsetX = cx - (cx - offsetX) * factor;
+  offsetY = cy - (cy - offsetY) * factor;
+  scale = Math.max(1, Math.min(40, scale * factor));
+  updateTransform();
+}
+
+function resetZoom() {
+  const rect = wrap.getBoundingClientRect();
+  scale = Math.min(rect.width / WIDTH, rect.height / HEIGHT) * 0.9;
+  offsetX = (rect.width  - WIDTH  * scale) / 2;
+  offsetY = (rect.height - HEIGHT * scale) / 2;
+  updateTransform();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
