@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tech Fest Canvas 🎨</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f; --panel: #13131a; --border: #2a2a3a;
+    --accent: #6c63ff; --accent2: #ff6584; --text: #e8e8f0;
+    --muted: #666680; --green: #00ff88; --gold: #ffd700;
+  }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── ANNOUNCEMENT BANNER ── */
+  #announcement-banner {
+    background: linear-gradient(90deg, #1a1a2e, #16213e, #1a1a2e);
+    border-bottom: 2px solid var(--accent);
+    padding: 10px 20px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    display: none;
+    position: relative;
+    animation: slideDown 0.3s ease;
+  }
+  #announcement-banner .close-banner {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px;
+  }
+  @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+  /* ── OVERLAYS ── */
+  .overlay { position: fixed; inset: 0; background: rgba(5,5,10,0.97); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .box { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 36px 28px; width: 100%; max-width: 400px; text-align: center; }
+  .box h2 { font-family: monospace; font-size: 20px; color: var(--accent); margin-bottom: 6px; }
+  .box p { color: var(--muted); font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
+  .field { width: 100%; padding: 13px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 15px; outline: none; margin-bottom: 8px; transition: border-color 0.2s; }
+  .field:focus { border-color: var(--accent); }
+  .field.err { border-color: var(--accent2); }
+  .field-err { color: var(--accent2); font-size: 11px; text-align: left; margin-top: -4px; margin-bottom: 8px; display: none; }
+  .code-field { font-family: monospace; font-size: 22px; letter-spacing: 4px; text-align: center; text-transform: uppercase; }
+  .btn { width: 100%; padding: 13px; background: var(--accent); color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; margin-bottom: 10px; }
+  .btn:hover { background: #5a52e0; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 13px; padding: 10px; }
+  .btn-secondary:hover { background: var(--border); color: var(--text); }
+  .btn-warn { background: #c0392b; } .btn-warn:hover { background: #e74c3c; }
+  .error-msg { color: var(--accent2); font-size: 13px; margin-top: 8px; display: none; }
+  .already-box { background: #1a1a0a; border: 1px solid #f39c12; border-radius: 10px; padding: 20px; margin-top: 16px; display: none; }
+  .already-box p { color: #f39c12; margin-bottom: 12px; font-size: 13px; }
+  .already-code { font-family: monospace; font-size: 26px; font-weight: bold; color: #ffd700; letter-spacing: 4px; margin: 10px 0; display: none; }
+  .success-box { background: #0a2a0a; border: 1px solid #43A047; border-radius: 10px; padding: 20px; margin-top: 16px; display: none; }
+  .big-code { font-family: monospace; font-size: 28px; font-weight: bold; color: #A5D6A7; letter-spacing: 4px; margin: 10px 0; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+  /* ── TOPBAR ── */
+  #topbar { background: var(--panel); border-bottom: 1px solid var(--border); padding: 8px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+  #topbar h1 { font-family: monospace; font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 1px; white-space: nowrap; }
+  #user-badge { background: #1a1a2e; border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  #pixel-counter { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  #pixel-counter span { color: var(--green); font-family: monospace; font-weight: bold; }
+  #lb-btn { background: none; border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 11px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  #lb-btn:hover { border-color: var(--gold); color: var(--gold); }
+  #admin-btn { background: none; border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 11px; color: var(--muted); cursor: pointer; white-space: nowrap; display: none; }
+  #admin-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── COOLDOWN BAR ── */
+  #cooldown-wrap { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  #cooldown-label { font-family: monospace; font-size: 12px; color: var(--accent2); white-space: nowrap; min-width: 50px; text-align: right; }
+  #cooldown-label.ready { color: var(--green); }
+  #cooldown-bar-wrap { width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  #cooldown-bar { height: 100%; width: 100%; background: var(--green); border-radius: 3px; transition: width 0.1s linear, background 0.3s; }
+
+  /* ── MAIN ── */
+  #main { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+  /* ── CANVAS ── */
+  #canvas-wrap { flex: 1; overflow: hidden; position: relative; cursor: crosshair; background: #05050a; }
+  #canvas { position: absolute; image-rendering: pixelated; image-rendering: crisp-edges; transform-origin: 0 0; }
+
+  /* ── BOTTOM HUD ── */
+  #bottom-hud { position: absolute; bottom: 12px; left: 12px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
+  #hover-info { background: rgba(10,10,15,0.85); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-family: monospace; font-size: 11px; color: var(--muted); }
+  #goto-wrap { background: rgba(10,10,15,0.85); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; display: flex; gap: 4px; align-items: center; pointer-events: all; }
+  #goto-x, #goto-y { width: 44px; padding: 3px 5px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: monospace; font-size: 11px; outline: none; text-align: center; }
+  #goto-btn { padding: 3px 8px; background: var(--accent); border: none; border-radius: 4px; color: white; font-size: 11px; cursor: pointer; }
+
+  /* ── ZOOM CONTROLS ── */
+  #zoom-controls { position: absolute; bottom: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .zoom-btn { width: 32px; height: 32px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .zoom-btn:hover { background: var(--border); }
+
+  /* ── MINIMAP ── */
+  #minimap-wrap { position: absolute; top: 10px; right: 10px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; cursor: pointer; box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+  #minimap { display: block; width: 120px; height: 120px; image-rendering: pixelated; }
+  #minimap-viewport { position: absolute; top: 0; left: 0; border: 2px solid var(--accent2); pointer-events: none; border-radius: 2px; }
+
+  /* ── HOVER TOOLTIP ── */
+  #pixel-tooltip { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 12px; pointer-events: none; z-index: 50; display: none; max-width: 200px; }
+  #pixel-tooltip .pt-coord { font-family: monospace; color: var(--accent); font-size: 13px; margin-bottom: 4px; }
+  #pixel-tooltip .pt-user { color: var(--text); }
+  #pixel-tooltip .pt-time { color: var(--muted); font-size: 11px; }
+  #pixel-tooltip .pt-color { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 4px; border: 1px solid var(--border); }
+
+  /* ── SIDEBAR ── */
+  #sidebar { width: 58px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 10px 6px; gap: 5px; overflow-y: auto; flex-shrink: 0; }
+  #sidebar-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; font-family: monospace; }
+  .swatch { width: 38px; height: 38px; border-radius: 7px; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s; flex-shrink: 0; }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch.selected { border-color: white; transform: scale(1.15); box-shadow: 0 0 8px rgba(255,255,255,0.4); }
+
+  /* ── LEADERBOARD POPUP ── */
+  #lb-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 320px; z-index: 150; display: none; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
+  #lb-popup h3 { font-family: monospace; color: var(--gold); font-size: 16px; margin-bottom: 16px; text-align: center; }
+  .lb-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-rank { font-family: monospace; font-weight: bold; width: 24px; color: var(--muted); }
+  .lb-rank.gold { color: #ffd700; } .lb-rank.silver { color: #c0c0c0; } .lb-rank.bronze { color: #cd7f32; }
+  .lb-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-count { font-family: monospace; color: var(--green); font-weight: bold; }
+  #lb-close { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; }
+  #lb-overlay { position: fixed; inset: 0; z-index: 140; display: none; }
+
+  /* ── ADMIN PANEL ── */
+  #admin-panel { position: fixed; top: 50px; right: 0; width: 300px; background: var(--panel); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); border-radius: 0 0 0 12px; padding: 20px; z-index: 50; display: none; max-height: 90vh; overflow-y: auto; }
+  #admin-panel h3 { font-family: monospace; font-size: 14px; color: var(--accent); margin-bottom: 16px; }
+  .admin-stat { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; color: var(--muted); }
+  .admin-stat span { color: var(--text); font-family: monospace; font-weight: bold; }
+  .admin-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .admin-section h4 { font-size: 12px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .admin-input { width: 100%; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; outline: none; margin-bottom: 8px; }
+  .admin-small-btn { padding: 7px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; }
+
+  /* ── LOADING ── */
+  #loading { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 200; flex-direction: column; gap: 12px; font-family: monospace; color: var(--muted); font-size: 14px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOAST ── */
+  #toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%) translateY(-10px); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 20px; font-size: 13px; color: var(--text); opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 300; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── UNDO BTN ── */
+  #undo-btn { position: absolute; bottom: 52px; right: 12px; width: 32px; height: 32px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0.4; transition: opacity 0.2s; }
+  #undo-btn.active { opacity: 1; }
+  #undo-btn:hover { background: var(--border); }
+
+  @media (max-width: 480px) {
+    #sidebar { width: 48px; } .swatch { width: 32px; height: 32px; }
+    .box { padding: 28px 18px; } .big-code { font-size: 22px; }
+    #minimap-wrap { width: 80px; height: 80px; } #minimap { width: 80px; height: 80px; }
+    #admin-panel { width: 100%; }
+    #cooldown-bar-wrap { width: 50px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading"><div class="spinner"></div><span id="loading-text">Loading canvas...</span></div>
+
+<!-- ANNOUNCEMENT BANNER -->
+<div id="announcement-banner">
+  <span id="announcement-text"></span>
+  <button class="close-banner" onclick="closeBanner()">×</button>
+</div>
+
+<!-- SCREEN 1: CHOOSE -->
+<div class="overlay" id="screen-auth" style="display:none;">
+  <div class="box">
+    <h2>🎨 Tech Fest Canvas</h2>
+    <p>Place pixels on a shared 200×200 canvas with everyone at the fest!</p>
+    <button class="btn" onclick="showScreen('screen-register')">🆕 New Participant — Register</button>
+    <button class="btn btn-secondary" onclick="showScreen('screen-login')">🔑 I Already Have a Fest ID</button>
+  </div>
+</div>
+
+<!-- SCREEN 2: REGISTER -->
+<div class="overlay" id="screen-register" style="display:none;">
+  <div class="box">
+    <h2>📝 Register</h2>
+    <p>Fill in your details to get your unique Fest ID.</p>
+    <input class="field" id="reg-name" type="text" placeholder="Your Full Name" maxlength="60" autocomplete="off" />
+    <div class="field-err" id="err-name"></div>
+    <input class="field" id="reg-phone" type="tel" placeholder="10-digit Phone Number" maxlength="10" autocomplete="off" />
+    <div class="field-err" id="err-phone"></div>
+    <input class="field" id="reg-college" type="text" placeholder="College Name" maxlength="100" autocomplete="off" />
+    <div class="field-err" id="err-college"></div>
+    <button class="btn" id="reg-btn" onclick="doRegister()">Register & Get My Fest ID</button>
+    <button class="btn btn-secondary" onclick="showScreen('screen-auth')">← Back</button>
+    <div class="error-msg" id="reg-error"></div>
+    <div class="already-box" id="already-box">
+      <p id="already-msg"></p>
+      <button class="btn btn-secondary" onclick="toggleShowCode()" id="show-code-btn">👁 Show My Fest ID</button>
+      <div class="already-code" id="already-code"></div>
+      <br>
+      <button class="btn" onclick="enterWithStoredCode()" id="enter-already-btn" style="display:none;">Enter Canvas →</button>
+    </div>
+    <div class="success-box" id="reg-success">
+      <div>🎉 Registration Successful!</div>
+      <div class="big-code" id="reg-code"></div>
+      <div class="hint">📸 Screenshot this code — it's your permanent Fest ID.</div>
+      <br>
+      <button class="btn" onclick="enterWithCode()">Enter Canvas Now →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 3: LOGIN -->
+<div class="overlay" id="screen-login" style="display:none;">
+  <div class="box">
+    <h2>🔑 Enter Canvas</h2>
+    <p>Enter your Fest ID to join the pixel canvas.</p>
+    <input class="field code-field" id="login-code" type="text" placeholder="PXF-XXXXXX" maxlength="10" autocomplete="off" />
+    <div class="field-err" id="err-login-code"></div>
+    <button class="btn" id="login-btn" onclick="doLogin()">Enter Canvas</button>
+    <button class="btn btn-secondary" onclick="showScreen('screen-auth')">← Back</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <h1>🎨 TECHFEST CANVAS</h1>
+  <div id="user-badge">Not logged in</div>
+  <button id="lb-btn" onclick="openLeaderboard()">🏆 Leaderboard</button>
+  <button id="admin-btn" onclick="toggleAdmin()">⚙ Admin</button>
+  <div id="pixel-counter">Pixels: <span id="total-pixels">—</span></div>
+  <div id="cooldown-wrap">
+    <div id="cooldown-bar-wrap"><div id="cooldown-bar"></div></div>
+    <div id="cooldown-label" class="ready">READY</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+
+    <!-- MINIMAP -->
+    <div id="minimap-wrap" onclick="minimapClick(event)">
+      <canvas id="minimap"></canvas>
+      <div id="minimap-viewport"></div>
+    </div>
+
+    <!-- BOTTOM HUD -->
+    <div id="bottom-hud">
+      <div id="hover-info">x: — y: —</div>
+      <div id="goto-wrap">
+        <input id="goto-x" type="number" placeholder="x" min="0" max="199" />
+        <input id="goto-y" type="number" placeholder="y" min="0" max="199" />
+        <button id="goto-btn" onclick="gotoCoords()">Go</button>
+      </div>
+    </div>
+
+    <!-- ZOOM + UNDO -->
+    <div id="zoom-controls">
+      <button class="zoom-btn" onclick="zoom(1.5)">+</button>
+      <button class="zoom-btn" onclick="zoom(1/1.5)">−</button>
+      <button class="zoom-btn" onclick="resetZoom()" style="font-size:11px">⌂</button>
+    </div>
+    <button id="undo-btn" title="Undo last pixel" onclick="undoPixel()">↩</button>
+  </div>
+  <div id="sidebar"><div id="sidebar-label">Color</div></div>
+</div>
+
+<!-- PIXEL TOOLTIP -->
+<div id="pixel-tooltip">
+  <div class="pt-coord" id="pt-coord"></div>
+  <div class="pt-user"><span class="pt-color" id="pt-color"></span><span id="pt-name"></span></div>
+  <div class="pt-time" id="pt-time"></div>
+</div>
+
+<!-- LEADERBOARD -->
+<div id="lb-overlay" onclick="closeLeaderboard()"></div>
+<div id="lb-popup">
+  <button id="lb-close" onclick="closeLeaderboard()">×</button>
+  <h3>🏆 Top Pixel Placers</h3>
+  <div id="lb-list"></div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel">
+  <h3>⚙ Admin Panel</h3>
+  <div id="admin-login-section">
+    <input class="admin-input" id="admin-pass" type="password" placeholder="Admin password" />
+    <button class="btn" onclick="adminLogin()" style="margin-bottom:0;">Login</button>
+    <div class="error-msg" id="admin-error"></div>
+  </div>
+  <div id="admin-content" style="display:none;">
+    <div class="admin-stat">Participants: <span id="stat-participants">—</span></div>
+    <div class="admin-stat">Pixels placed: <span id="stat-pixels">—</span></div>
+    <button class="btn btn-secondary" style="font-size:12px;padding:8px;margin-bottom:8px;" onclick="loadStats()">🔄 Refresh</button>
+
+    <div class="admin-section">
+      <h4>📢 Announcement</h4>
+      <textarea class="admin-input" id="announcement-input" rows="3" placeholder="Type announcement message..."></textarea>
+      <div style="display:flex;gap:8px;">
+        <button class="admin-small-btn" style="background:var(--accent);color:white;flex:1;" onclick="sendAnnouncement()">Send</button>
+        <button class="admin-small-btn" style="background:var(--border);color:var(--text);flex:1;" onclick="clearAnnouncement()">Clear</button>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h4>Canvas Controls</h4>
+      <button class="btn btn-warn" style="font-size:13px;padding:10px;" onclick="clearCanvas()">🗑 Clear Canvas</button>
+    </div>
+
+    <div class="admin-section">
+      <h4>⏰ Auto-Clear</h4>
+      <input type="datetime-local" class="admin-input" id="auto-clear-time" />
+      <div style="display:flex;gap:8px;">
+        <button class="admin-small-btn" style="background:var(--accent);color:white;flex:1;" onclick="setAutoClear()">Set</button>
+        <button class="admin-small-btn" style="background:var(--border);color:var(--text);flex:1;" onclick="disableAutoClear()">Disable</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;" id="auto-clear-status">Auto-clear: disabled</div>
+    </div>
+
+    <div class="admin-section">
+      <button class="btn btn-secondary" style="font-size:12px;padding:8px;margin-bottom:0;" onclick="adminLogout()">Logout</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──
+const SUPABASE_URL = 'https://pcrwdirpqzqtoqjuqdmq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kPlxSvcRRkfXkJNt7lom0A_5NtXRAYE';
+const FASTAPI_URL  = 'https://techfest-canvas.onrender.com';
+const WIDTH = 200, HEIGHT = 200, COOLDOWN_MS = 30000;
+
+// r/Place 2022 exact palette
+const PALETTE = [
+  '#ffffff','#d4d7d9','#898d90','#000000',
+  '#ff4500','#ffa800','#ffd635','#00a368',
+  '#7eed56','#2450a4','#3690ea','#51e9f4',
+  '#811e9f','#b44ac0','#ff99aa','#9c6926',
+  '#be0039','#ff3881','#6d001a','#bf4300',
+  '#ffb470','#000000','#493ac1','#6a5cff',
+  '#00756f','#009eaa','#00ccc0','#94b3ff',
+  '#e4abff','#de107f','#ff3881','#6d482f'
+];
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let festCode = null, userName = null, selectedColor = 3;
+let cooldownEnd = 0, cooldownInterval = null, isPlacing = false;
+let scale = 3, offsetX = 0, offsetY = 0, isDragging = false, dragStart = {x:0,y:0};
+let adminPassword = null, autoClearTimer = null, storedCode = null;
+let undoState = null; // {x, y, prevColor}
+let hoverTimer = null, lastHoverPos = null;
+let totalPixels = 0;
+
+const canvasEl  = document.getElementById('canvas');
+const ctx       = canvasEl.getContext('2d');
+const minimapEl = document.getElementById('minimap');
+const mctx      = minimapEl.getContext('2d');
+const wrap      = document.getElementById('canvas-wrap');
+canvasEl.width  = WIDTH; canvasEl.height = HEIGHT;
+minimapEl.width = WIDTH; minimapEl.height = HEIGHT;
+ctx.fillStyle   = '#ffffff'; ctx.fillRect(0,0,WIDTH,HEIGHT);
+mctx.fillStyle  = '#ffffff'; mctx.fillRect(0,0,WIDTH,HEIGHT);
+
+// ── BOOT ──
+window.addEventListener('load', async () => {
+  buildPalette();
+  await loadCanvas();
+  subscribeRealtime();
+  subscribeAnnouncements();
+  await checkAutoClear();
+  await updatePixelCounter();
+  document.getElementById('loading').style.display = 'none';
+  showScreen('screen-auth');
+});
+
+// ── SCREENS ──
+function showScreen(id) {
+  ['screen-auth','screen-register','screen-login'].forEach(s => document.getElementById(s).style.display = 'none');
+  if (id) document.getElementById(id).style.display = 'flex';
+}
+function hideAllScreens() { showScreen(null); }
+
+// ── VALIDATION ──
+function validateName(v) {
+  v = v.trim();
+  if (v.length < 2) return 'Name must be at least 2 characters';
+  if (v.length > 60) return 'Name is too long';
+  if (!/^[A-Za-z\s\.\'\-]+$/.test(v)) return 'Name can only contain letters and spaces';
+  return null;
+}
+function validatePhone(v) {
+  v = v.trim().replace(/[\s\-]/g,'');
+  if (!/^\d+$/.test(v)) return 'Phone number must contain only digits';
+  if (v.length !== 10) return 'Phone number must be exactly 10 digits';
+  if (!['6','7','8','9'].includes(v[0])) return 'Phone must start with 6, 7, 8, or 9';
+  return null;
+}
+function validateCollege(v) {
+  v = v.trim();
+  if (v.length < 2) return 'College name must be at least 2 characters';
+  if (v.length > 100) return 'College name is too long';
+  return null;
+}
+function validateFestCode(v) {
+  if (!/^PXF-[A-Z0-9]{6}$/.test(v.trim().toUpperCase())) return 'Fest ID must be in format PXF-XXXXXX';
+  return null;
+}
+function setFieldErr(fid, eid, msg) {
+  document.getElementById(fid).classList.toggle('err', !!msg);
+  const el = document.getElementById(eid);
+  el.textContent = msg||''; el.style.display = msg ? 'block' : 'none';
+}
+
+document.getElementById('reg-name').addEventListener('input', e => setFieldErr('reg-name','err-name',validateName(e.target.value)));
+document.getElementById('reg-phone').addEventListener('input', e => { e.target.value=e.target.value.replace(/[^\d]/g,''); setFieldErr('reg-phone','err-phone',validatePhone(e.target.value)); });
+document.getElementById('reg-college').addEventListener('input', e => setFieldErr('reg-college','err-college',validateCollege(e.target.value)));
+document.getElementById('login-code').addEventListener('input', e => { e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9\-]/g,''); setFieldErr('login-code','err-login-code',validateFestCode(e.target.value)); });
+document.getElementById('reg-name').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('reg-phone').focus(); });
+document.getElementById('reg-phone').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('reg-college').focus(); });
+document.getElementById('reg-college').addEventListener('keydown', e => { if(e.key==='Enter') doRegister(); });
+document.getElementById('login-code').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+// ── REGISTER ──
+async function doRegister() {
+  const name=document.getElementById('reg-name').value.trim();
+  const phone=document.getElementById('reg-phone').value.trim();
+  const college=document.getElementById('reg-college').value.trim();
+  const ne=validateName(name), pe=validatePhone(phone), ce=validateCollege(college);
+  setFieldErr('reg-name','err-name',ne); setFieldErr('reg-phone','err-phone',pe); setFieldErr('reg-college','err-college',ce);
+  if (ne||pe||ce) return;
+  const btn=document.getElementById('reg-btn'), errEl=document.getElementById('reg-error');
+  btn.textContent='Registering...'; btn.disabled=true; errEl.style.display='none';
+  document.getElementById('already-box').style.display='none'; document.getElementById('reg-success').style.display='none';
+  try {
+    const res=await fetch(FASTAPI_URL+'/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,college})});
+    const data=await res.json();
+    if (!res.ok) { errEl.textContent=Array.isArray(data.detail)?data.detail.map(d=>d.msg).join(', '):(data.detail||'Registration failed.'); errEl.style.display='block'; btn.textContent='Register & Get My Fest ID'; btn.disabled=false; return; }
+    if (data.status==='already_registered') {
+      storedCode=data.fest_code; festCode=data.fest_code; userName=data.name;
+      document.getElementById('already-msg').textContent=data.message;
+      document.getElementById('already-code').textContent=data.fest_code;
+      document.getElementById('already-box').style.display='block';
+      btn.textContent='Register & Get My Fest ID'; btn.disabled=false; return;
+    }
+    festCode=data.fest_code; userName=name;
+    document.getElementById('reg-code').textContent=data.fest_code;
+    document.getElementById('reg-success').style.display='block'; btn.style.display='none';
+  } catch(e) { errEl.textContent='Could not connect to server. Please try again.'; errEl.style.display='block'; btn.textContent='Register & Get My Fest ID'; btn.disabled=false; }
+}
+
+let codeVisible=false;
+function toggleShowCode() {
+  codeVisible=!codeVisible;
+  document.getElementById('already-code').style.display=codeVisible?'block':'none';
+  document.getElementById('enter-already-btn').style.display=codeVisible?'block':'none';
+  document.getElementById('show-code-btn').textContent=codeVisible?'🙈 Hide Fest ID':'👁 Show My Fest ID';
+}
+function enterWithStoredCode() { document.getElementById('user-badge').textContent='👤 '+userName; hideAllScreens(); resetZoom(); checkAdminStatus(festCode); }
+function enterWithCode() { document.getElementById('user-badge').textContent='👤 '+userName; hideAllScreens(); resetZoom(); checkAdminStatus(festCode); }
+
+// ── LOGIN ──
+async function doLogin() {
+  const code=document.getElementById('login-code').value.trim().toUpperCase();
+  const errEl=document.getElementById('login-error');
+  const ce=validateFestCode(code); setFieldErr('login-code','err-login-code',ce); if(ce) return;
+  const btn=document.getElementById('login-btn'); btn.textContent='Checking...'; btn.disabled=true; errEl.style.display='none';
+  try {
+    const res=await fetch(FASTAPI_URL+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fest_code:code})});
+    if (res.status===401) { errEl.textContent='Invalid Fest ID. Please check and try again.'; errEl.style.display='block'; btn.textContent='Enter Canvas'; btn.disabled=false; return; }
+    const data=await res.json();
+    festCode=data.fest_code; userName=data.name;
+    document.getElementById('user-badge').textContent='👤 '+userName;
+    hideAllScreens(); resetZoom();
+    if (data.last_pixel_at) { const rem=COOLDOWN_MS-(Date.now()-new Date(data.last_pixel_at).getTime()); if(rem>0) startCooldown(rem); }
+    await checkAdminStatus(data.fest_code);
+  } catch(e) { errEl.textContent='Could not connect. Try again.'; errEl.style.display='block'; btn.textContent='Enter Canvas'; btn.disabled=false; }
+}
+
+// ── LOAD CANVAS ──
+async function loadCanvas() {
+  document.getElementById('loading-text').textContent='Loading canvas pixels...';
+  const {data}=await sb.from('pixels').select('x,y,color');
+  if (data) { for (const px of data) { drawPixel(px.x,px.y,px.color); } }
+}
+
+function drawPixel(x,y,color) {
+  ctx.fillStyle=color; ctx.fillRect(x,y,1,1);
+  mctx.fillStyle=color; mctx.fillRect(x,y,1,1);
+}
+
+// ── REALTIME ──
+function subscribeRealtime() {
+  sb.channel('canvas-pixels')
+    .on('postgres_changes',{event:'*',schema:'public',table:'pixels'},payload=>{
+      if (payload.new&&payload.new.x!==undefined) {
+        drawPixel(payload.new.x,payload.new.y,payload.new.color);
+        totalPixels++;
+        document.getElementById('total-pixels').textContent=totalPixels.toLocaleString();
+        updateMinimapViewport();
+      }
+    }).subscribe();
+}
+
+// ── ANNOUNCEMENTS ──
+function subscribeAnnouncements() {
+  sb.channel('announcements-channel')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'announcements'},payload=>{
+      if (payload.new&&payload.new.active) showBanner(payload.new.message);
+    })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'announcements'},payload=>{
+      if (payload.new&&!payload.new.active) closeBanner();
+    }).subscribe();
+
+  // Load current active announcement
+  sb.from('announcements').select('message').eq('active',true).order('created_at',{ascending:false}).limit(1).then(({data})=>{
+    if (data&&data.length>0) showBanner(data[0].message);
+  });
+}
+
+function showBanner(msg) {
+  document.getElementById('announcement-text').textContent=msg;
+  document.getElementById('announcement-banner').style.display='block';
+}
+function closeBanner() { document.getElementById('announcement-banner').style.display='none'; }
+
+// ── PIXEL COUNTER ──
+async function updatePixelCounter() {
+  const {count}=await sb.from('pixels').select('id',{count:'exact',head:true});
+  totalPixels=count||0;
+  document.getElementById('total-pixels').textContent=totalPixels.toLocaleString();
+}
+
+// ── PLACE PIXEL ──
+async function placePixel(x,y) {
+  if (!festCode) { showToast('Please log in first!'); showScreen('screen-auth'); return; }
+  if (isPlacing) return;
+  if (x<0||x>=WIDTH||y<0||y>=HEIGHT) return;
+  const now=Date.now();
+  if (now<cooldownEnd) { showToast(`⏱ Wait ${Math.ceil((cooldownEnd-now)/1000)}s`); return; }
+
+  isPlacing=true;
+  const color=PALETTE[selectedColor];
+
+  // Save undo state
+  const imgData=ctx.getImageData(x,y,1,1).data;
+  const prevColor='#'+[imgData[0],imgData[1],imgData[2]].map(v=>v.toString(16).padStart(2,'0')).join('');
+  undoState={x,y,prevColor,newColor:color};
+  document.getElementById('undo-btn').classList.add('active');
+
+  // Optimistic draw
+  drawPixel(x,y,color);
+
+  try {
+    const res=await fetch(FASTAPI_URL+'/place',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fest_code:festCode,x,y,color})});
+    if (res.status===429) {
+      const data=await res.json();
+      drawPixel(x,y,prevColor);
+      undoState=null; document.getElementById('undo-btn').classList.remove('active');
+      const match=data.detail.match(/(\d+) seconds/);
+      startCooldown((match?parseInt(match[1]):30)*1000);
+      showToast(data.detail);
+    } else if (res.status===401) {
+      showToast('Session expired. Please log in again.'); festCode=null; showScreen('screen-auth');
+    } else if (!res.ok) {
+      showToast('Failed to place pixel. Try again.');
+    } else {
+      startCooldown(COOLDOWN_MS);
+      totalPixels++;
+      document.getElementById('total-pixels').textContent=totalPixels.toLocaleString();
+    }
+  } catch(e) { showToast('Connection error. Try again.'); }
+  isPlacing=false;
+}
+
+// ── UNDO ──
+async function undoPixel() {
+  if (!undoState||!festCode) return;
+  const {x,y,prevColor}=undoState;
+  const now=Date.now();
+  if (now<cooldownEnd) { showToast(`⏱ Wait ${Math.ceil((cooldownEnd-now)/1000)}s to undo`); return; }
+  isPlacing=true;
+  drawPixel(x,y,prevColor);
+  try {
+    await fetch(FASTAPI_URL+'/place',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fest_code:festCode,x,y,color:prevColor})});
+    startCooldown(COOLDOWN_MS);
+  } catch(e) { showToast('Undo failed. Try again.'); }
+  undoState=null;
+  document.getElementById('undo-btn').classList.remove('active');
+  isPlacing=false;
+}
+
+// ── PALETTE ──
+function buildPalette() {
+  const sidebar=document.getElementById('sidebar');
+  sidebar.querySelectorAll('.swatch').forEach(s=>s.remove());
+  PALETTE.forEach((color,i)=>{
+    const s=document.createElement('div');
+    s.className='swatch'+(i===selectedColor?' selected':'');
+    s.style.background=color; s.title=color;
+    s.onclick=()=>{ selectedColor=i; document.querySelectorAll('.swatch').forEach((sw,j)=>sw.classList.toggle('selected',j===i)); };
+    sidebar.appendChild(s);
+  });
+}
+
+// ── COOLDOWN BAR ──
+function startCooldown(ms) {
+  cooldownEnd=Date.now()+ms;
+  const label=document.getElementById('cooldown-label');
+  const bar=document.getElementById('cooldown-bar');
+  if (cooldownInterval) clearInterval(cooldownInterval);
+  label.className='';
+  cooldownInterval=setInterval(()=>{
+    const rem=cooldownEnd-Date.now();
+    if (rem<=0) {
+      label.textContent='READY'; label.className='ready';
+      bar.style.width='100%'; bar.style.background='var(--green)';
+      clearInterval(cooldownInterval);
+    } else {
+      const pct=((COOLDOWN_MS-rem)/COOLDOWN_MS*100);
+      label.textContent=Math.ceil(rem/1000)+'s';
+      bar.style.width=pct+'%';
+      bar.style.background=rem>15000?'var(--accent2)':'var(--gold)';
+    }
+  },100);
+  bar.style.width='0%'; bar.style.background='var(--accent2)';
+}
+
+// ── LEADERBOARD ──
+async function openLeaderboard() {
+  document.getElementById('lb-popup').style.display='block';
+  document.getElementById('lb-overlay').style.display='block';
+  document.getElementById('lb-list').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;">Loading...</div>';
+  const {data}=await sb.from('participants').select('name,pixel_count').order('pixel_count',{ascending:false}).limit(10);
+  if (!data||data.length===0) { document.getElementById('lb-list').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;">No pixels placed yet!</div>'; return; }
+  const ranks=['🥇','🥈','🥉'];
+  const rankClasses=['gold','silver','bronze'];
+  document.getElementById('lb-list').innerHTML=data.map((u,i)=>`
+    <div class="lb-row">
+      <div class="lb-rank ${rankClasses[i]||''}">${ranks[i]||i+1}</div>
+      <div class="lb-name">${u.name}</div>
+      <div class="lb-count">${(u.pixel_count||0).toLocaleString()} px</div>
+    </div>`).join('');
+}
+function closeLeaderboard() { document.getElementById('lb-popup').style.display='none'; document.getElementById('lb-overlay').style.display='none'; }
+
+// ── HOVER TOOLTIP ──
+async function showPixelTooltip(x,y,clientX,clientY) {
+  if (x<0||x>=WIDTH||y<0||y>=HEIGHT) return;
+  const {data}=await sb.from('pixels').select('color,placed_by,placed_at').eq('x',x).eq('y',y).maybeSingle();
+  if (!data) return;
+  const tip=document.getElementById('pixel-tooltip');
+  document.getElementById('pt-coord').textContent=`(${x}, ${y})`;
+  document.getElementById('pt-color').style.background=data.color;
+  let name=data.placed_by||'Unknown';
+  if (data.placed_by) {
+    const {data:p}=await sb.from('participants').select('name').eq('fest_code',data.placed_by).maybeSingle();
+    if (p) name=p.name;
+  }
+  document.getElementById('pt-name').textContent=name;
+  document.getElementById('pt-time').textContent=data.placed_at?new Date(data.placed_at).toLocaleTimeString():'';
+  tip.style.display='block';
+  tip.style.left=(clientX+14)+'px';
+  tip.style.top=(clientY-10)+'px';
+}
+function hideTooltip() { document.getElementById('pixel-tooltip').style.display='none'; }
+
+// ── GOTO COORDS ──
+function gotoCoords() {
+  const x=parseInt(document.getElementById('goto-x').value);
+  const y=parseInt(document.getElementById('goto-y').value);
+  if (isNaN(x)||isNaN(y)||x<0||x>=WIDTH||y<0||y>=HEIGHT) { showToast('Enter valid coordinates (0-199)'); return; }
+  const r=wrap.getBoundingClientRect();
+  offsetX=r.width/2-x*scale;
+  offsetY=r.height/2-y*scale;
+  updateTransform(); updateMinimapViewport();
+}
+
+// ── MINIMAP ──
+function updateMinimapViewport() {
+  const mw=minimapEl.offsetWidth, mh=minimapEl.offsetHeight;
+  const r=wrap.getBoundingClientRect();
+  const scaleX=mw/WIDTH, scaleY=mh/HEIGHT;
+  const vx=Math.max(0,-offsetX/scale)*scaleX;
+  const vy=Math.max(0,-offsetY/scale)*scaleY;
+  const vw=Math.min(mw,(r.width/scale)*scaleX);
+  const vh=Math.min(mh,(r.height/scale)*scaleY);
+  const vp=document.getElementById('minimap-viewport');
+  vp.style.left=vx+'px'; vp.style.top=vy+'px';
+  vp.style.width=vw+'px'; vp.style.height=vh+'px';
+}
+
+function minimapClick(e) {
+  const r=minimapEl.getBoundingClientRect();
+  const mx=(e.clientX-r.left)/r.width*WIDTH;
+  const my=(e.clientY-r.top)/r.height*HEIGHT;
+  const wr=wrap.getBoundingClientRect();
+  offsetX=wr.width/2-mx*scale;
+  offsetY=wr.height/2-my*scale;
+  updateTransform(); updateMinimapViewport();
+}
+
+// ── ADMIN ──
+async function checkAdminStatus(code) {
+  const {data}=await sb.from('admins').select('fest_code').eq('fest_code',code).maybeSingle();
+  if (data) document.getElementById('admin-btn').style.display='block';
+}
+function toggleAdmin() {
+  const p=document.getElementById('admin-panel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+async function adminLogin() {
+  const pass=document.getElementById('admin-pass').value;
+  const errEl=document.getElementById('admin-error');
+  if (!pass) return;
+  try {
+    const res=await fetch(FASTAPI_URL+'/admin/stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});
+    if (res.status===403) { errEl.textContent='Wrong password.'; errEl.style.display='block'; return; }
+    const data=await res.json();
+    adminPassword=pass;
+    document.getElementById('admin-login-section').style.display='none';
+    document.getElementById('admin-content').style.display='block';
+    document.getElementById('stat-participants').textContent=data.total_participants;
+    document.getElementById('stat-pixels').textContent=data.total_pixels;
+    await loadAutoClearStatus();
+  } catch(e) { errEl.textContent='Connection error.'; errEl.style.display='block'; }
+}
+async function loadStats() {
+  if (!adminPassword) return;
+  const res=await fetch(FASTAPI_URL+'/admin/stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:adminPassword})});
+  const data=await res.json();
+  document.getElementById('stat-participants').textContent=data.total_participants;
+  document.getElementById('stat-pixels').textContent=data.total_pixels;
+  showToast('Stats refreshed!');
+}
+async function clearCanvas() {
+  if (!adminPassword) return;
+  if (!confirm('Clear entire canvas? Cannot be undone!')) return;
+  const res=await fetch(FASTAPI_URL+'/admin/clear-canvas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:adminPassword})});
+  if (res.ok) {
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,WIDTH,HEIGHT);
+    mctx.fillStyle='#ffffff'; mctx.fillRect(0,0,WIDTH,HEIGHT);
+    totalPixels=0; document.getElementById('total-pixels').textContent='0';
+    showToast('✅ Canvas cleared!');
+  }
+}
+async function sendAnnouncement() {
+  const msg=document.getElementById('announcement-input').value.trim();
+  if (!msg) return;
+  // Deactivate old announcements
+  await sb.from('announcements').update({active:false}).eq('active',true);
+  // Insert new
+  await sb.from('announcements').insert({message:msg,active:true});
+  showToast('📢 Announcement sent!');
+}
+async function clearAnnouncement() {
+  await sb.from('announcements').update({active:false}).eq('active',true);
+  closeBanner();
+  showToast('Announcement cleared.');
+}
+async function setAutoClear() {
+  if (!adminPassword) return;
+  const timeVal=document.getElementById('auto-clear-time').value;
+  if (!timeVal) { showToast('Please select a date and time.'); return; }
+  const isoTime=new Date(timeVal).toISOString();
+  await fetch(FASTAPI_URL+'/admin/setting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:adminPassword,key:'auto_clear_time',value:isoTime})});
+  await fetch(FASTAPI_URL+'/admin/setting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:adminPassword,key:'auto_clear_enabled',value:'true'})});
+  document.getElementById('auto-clear-status').textContent=`Set for: ${new Date(timeVal).toLocaleString()}`;
+  scheduleAutoClear(new Date(timeVal).getTime());
+  showToast('✅ Auto-clear scheduled!');
+}
+async function disableAutoClear() {
+  if (!adminPassword) return;
+  await fetch(FASTAPI_URL+'/admin/setting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:adminPassword,key:'auto_clear_enabled',value:'false'})});
+  if (autoClearTimer) { clearTimeout(autoClearTimer); autoClearTimer=null; }
+  document.getElementById('auto-clear-status').textContent='Auto-clear: disabled';
+  showToast('Auto-clear disabled.');
+}
+async function loadAutoClearStatus() {
+  const {data}=await sb.from('admin_settings').select('key,value').in('key',['auto_clear_enabled','auto_clear_time']);
+  if (!data) return;
+  const enabled=data.find(d=>d.key==='auto_clear_enabled')?.value==='true';
+  const time=data.find(d=>d.key==='auto_clear_time')?.value;
+  if (enabled&&time) { document.getElementById('auto-clear-status').textContent=`Set for: ${new Date(time).toLocaleString()}`; document.getElementById('auto-clear-time').value=new Date(time).toISOString().slice(0,16); scheduleAutoClear(new Date(time).getTime()); }
+}
+async function checkAutoClear() {
+  const {data}=await sb.from('admin_settings').select('key,value').in('key',['auto_clear_enabled','auto_clear_time']);
+  if (!data) return;
+  const enabled=data.find(d=>d.key==='auto_clear_enabled')?.value==='true';
+  const time=data.find(d=>d.key==='auto_clear_time')?.value;
+  if (enabled&&time) scheduleAutoClear(new Date(time).getTime());
+}
+function scheduleAutoClear(timestamp) {
+  if (autoClearTimer) clearTimeout(autoClearTimer);
+  const delay=timestamp-Date.now();
+  if (delay>0) {
+    autoClearTimer=setTimeout(async()=>{
+      await sb.from('pixels').delete().neq('id',0);
+      ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,WIDTH,HEIGHT);
+      mctx.fillStyle='#ffffff'; mctx.fillRect(0,0,WIDTH,HEIGHT);
+      totalPixels=0; document.getElementById('total-pixels').textContent='0';
+      showToast('🗑 Canvas auto-cleared!');
+    },delay);
+  }
+}
+function adminLogout() {
+  adminPassword=null;
+  document.getElementById('admin-login-section').style.display='block';
+  document.getElementById('admin-content').style.display='none';
+  document.getElementById('admin-pass').value='';
+  document.getElementById('admin-error').style.display='none';
+  document.getElementById('admin-panel').style.display='none';
+}
+
+// ── CANVAS CONTROLS ──
+function getPos(cx,cy) { const r=wrap.getBoundingClientRect(); return {x:Math.floor((cx-r.left-offsetX)/scale),y:Math.floor((cy-r.top-offsetY)/scale)}; }
+
+wrap.addEventListener('mousedown', e => { isDragging=false; dragStart={x:e.clientX-offsetX,y:e.clientY-offsetY}; hideTooltip(); });
+wrap.addEventListener('mousemove', e => {
+  const p=getPos(e.clientX,e.clientY);
+  document.getElementById('hover-info').textContent=`x: ${p.x}  y: ${p.y}`;
+  if (e.buttons===1) {
+    if (Math.abs(e.clientX-dragStart.x-offsetX)>4||Math.abs(e.clientY-dragStart.y-offsetY)>4) isDragging=true;
+    offsetX=e.clientX-dragStart.x; offsetY=e.clientY-dragStart.y; updateTransform(); updateMinimapViewport(); hideTooltip();
+  } else {
+    // Hover tooltip with delay
+    clearTimeout(hoverTimer);
+    const cp={x:p.x,y:p.y,cx:e.clientX,cy:e.clientY};
+    hoverTimer=setTimeout(()=>{ if(!isDragging) showPixelTooltip(cp.x,cp.y,cp.cx,cp.cy); },600);
+  }
+});
+wrap.addEventListener('mouseleave', ()=>{ clearTimeout(hoverTimer); hideTooltip(); });
+wrap.addEventListener('mouseup', e => {
+  if (!isDragging) { const p=getPos(e.clientX,e.clientY); placePixel(p.x,p.y); hideTooltip(); }
+  isDragging=false;
+});
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f=e.deltaY<0?1.15:1/1.15, r=wrap.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  offsetX=mx-(mx-offsetX)*f; offsetY=my-(my-offsetY)*f;
+  scale=Math.max(1,Math.min(40,scale*f)); updateTransform(); updateMinimapViewport();
+},{passive:false});
+
+let lastDist=0;
+wrap.addEventListener('touchstart', e=>{
+  if(e.touches.length===1){dragStart={x:e.touches[0].clientX-offsetX,y:e.touches[0].clientY-offsetY};isDragging=false;}
+  else if(e.touches.length===2) lastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+},{passive:true});
+wrap.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  if(e.touches.length===1){
+    if(Math.abs(e.touches[0].clientX-dragStart.x-offsetX)>4||Math.abs(e.touches[0].clientY-dragStart.y-offsetY)>4) isDragging=true;
+    offsetX=e.touches[0].clientX-dragStart.x; offsetY=e.touches[0].clientY-dragStart.y; updateTransform(); updateMinimapViewport();
+  } else if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    scale=Math.max(1,Math.min(40,scale*d/lastDist)); lastDist=d; updateTransform(); updateMinimapViewport();
+  }
+},{passive:false});
+wrap.addEventListener('touchend', e=>{
+  if(!isDragging&&e.changedTouches.length===1){const p=getPos(e.changedTouches[0].clientX,e.changedTouches[0].clientY);placePixel(p.x,p.y);}
+  isDragging=false;
+},{passive:true});
+
+function updateTransform(){canvasEl.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`;}
+function zoom(f){const r=wrap.getBoundingClientRect();const cx=r.width/2,cy=r.height/2;offsetX=cx-(cx-offsetX)*f;offsetY=cy-(cy-offsetY)*f;scale=Math.max(1,Math.min(40,scale*f));updateTransform();updateMinimapViewport();}
+function resetZoom(){const r=wrap.getBoundingClientRect();scale=Math.min(r.width/WIDTH,r.height/HEIGHT)*0.9;offsetX=(r.width-WIDTH*scale)/2;offsetY=(r.height-HEIGHT*scale)/2;updateTransform();updateMinimapViewport();}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+</script>
+</body>
+</html>
