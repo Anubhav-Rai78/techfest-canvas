@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tech Fest Canvas 🎨</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f;
+    --panel: #13131a;
+    --border: #2a2a3a;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --green: #00ff88;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── OVERLAY BASE ── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5,5,10,0.97);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 28px;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+  }
+  .box h2 {
+    font-family: monospace;
+    font-size: 20px;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .box p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  .field {
+    width: 100%;
+    padding: 13px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 15px;
+    outline: none;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+  .field:focus { border-color: var(--accent); }
+  .code-field {
+    font-family: monospace;
+    font-size: 22px;
+    letter-spacing: 4px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-bottom: 10px;
+  }
+  .btn:hover { background: #5a52e0; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    padding: 10px;
+  }
+  .btn-secondary:hover { background: var(--border); color: var(--text); }
+  .error-msg { color: var(--accent2); font-size: 13px; margin-top: 8px; display: none; }
+  .success-box {
+    background: #0a2a0a;
+    border: 1px solid #43A047;
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 16px;
+    display: none;
+  }
+  .big-code {
+    font-family: monospace;
+    font-size: 28px;
+    font-weight: bold;
+    color: #A5D6A7;
+    letter-spacing: 4px;
+    margin: 10px 0;
+  }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+  /* ── TOPBAR ── */
+  #topbar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  #topbar h1 {
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  #user-badge {
+    background: #1a1a2e;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  }
+  #cooldown-display {
+    margin-left: auto;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent2);
+    white-space: nowrap;
+    min-width: 80px;
+    text-align: right;
+  }
+  #cooldown-display.ready { color: var(--green); }
+
+  /* ── MAIN ── */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  #canvas-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    cursor: crosshair;
+    background: #05050a;
+  }
+  #canvas {
+    position: absolute;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    transform-origin: 0 0;
+  }
+  #hover-info {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(10,10,15,0.85);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  #zoom-controls {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .zoom-btn {
+    width: 32px; height: 32px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .zoom-btn:hover { background: var(--border); }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: 58px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 6px;
+    gap: 5px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #sidebar-label {
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 1px; text-transform: uppercase;
+    margin-bottom: 4px; font-family: monospace;
+  }
+  .swatch {
+    width: 38px; height: 38px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s, border-color 0.1s;
+    flex-shrink: 0;
+  }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch.selected {
+    border-color: white;
+    transform: scale(1.15);
+    box-shadow: 0 0 8px rgba(255,255,255,0.4);
+  }
+
+  /* ── LOADING ── */
+  #loading {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; flex-direction: column; gap: 12px;
+    font-family: monospace; color: var(--muted); font-size: 14px;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; top: 60px; left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 20px;
+    font-size: 13px; color: var(--text);
+    opacity: 0; transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none; z-index: 300; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 480px) {
+    #sidebar { width: 48px; }
+    .swatch { width: 32px; height: 32px; }
+    .box { padding: 28px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <span id="loading-text">Loading canvas...</span>
+</div>
+
+<!-- SCREEN 1: REGISTER or LOGIN choice -->
+<div class="overlay" id="screen-auth" style="display:none;">
+  <div class="box">
+    <h2>🎨 Tech Fest Canvas</h2>
+    <p>Place pixels on a shared 200×200 canvas with your friends!</p>
+    <button class="btn" onclick="showScreen('screen-register')">🆕 Register (New Participant)</button>
+    <button class="btn btn-secondary" onclick="showScreen('screen-login')">🔑 I Already Have a Fest ID</button>
+  </div>
+</div>
+
+<!-- SCREEN 2: REGISTER -->
+<div class="overlay" id="screen-register" style="display:none;">
+  <div class="box">
+    <h2>📝 Register</h2>
+    <p>Fill in your details to get your unique Fest ID.</p>
+    <input class="field" id="reg-name" type="text" placeholder="Your Full Name" />
+    <input class="field" id="reg-phone" type="tel" placeholder="Phone Number" />
+    <input class="field" id="reg-college" type="text" placeholder="College Name" />
+    <button class="btn" id="reg-btn" onclick="doRegister()">Register & Get My Fest ID</button>
+    <button class="btn btn-secondary" onclick="showScreen('screen-auth')">← Back</button>
+    <div class="error-msg" id="reg-error"></div>
+    <div class="success-box" id="reg-success">
+      <div>🎉 Registration Successful!</div>
+      <div class="big-code" id="reg-code"></div>
+      <div class="hint">Screenshot this code — you'll need it to enter the canvas.<br>It's your permanent Fest ID.</div>
+      <br>
+      <button class="btn" onclick="enterWithCode(document.getElementById('reg-code').textContent)">Enter Canvas Now →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 3: LOGIN -->
+<div class="overlay" id="screen-login" style="display:none;">
+  <div class="box">
+    <h2>🔑 Enter Canvas</h2>
+    <p>Enter your Fest ID to join the pixel canvas.</p>
+    <input class="field code-field" id="login-code" type="text" placeholder="PXF-XXXXXX" maxlength="10" autocomplete="off" />
+    <button class="btn" id="login-btn" onclick="doLogin()">Enter Canvas</button>
+    <button class="btn btn-secondary" onclick="showScreen('screen-auth')">← Back</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <h1>🎨 TECHFEST CANVAS</h1>
+  <div id="user-badge">Not logged in</div>
+  <div id="cooldown-display" class="ready">✓ READY</div>
+</div>
+
+<!-- CANVAS -->
+<div id="main">
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="hover-info">x: — y: —</div>
+    <div id="zoom-controls">
+      <button class="zoom-btn" onclick="zoom(1.5)">+</button>
+      <button class="zoom-btn" onclick="zoom(1/1.5)">−</button>
+      <button class="zoom-btn" onclick="resetZoom()" style="font-size:11px">⌂</button>
+    </div>
+  </div>
+  <div id="sidebar">
+    <div id="sidebar-label">Color</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──
+const SUPABASE_URL  = 'https://pcrwdirpqzqtoqjuqdmq.supabase.co';
+const SUPABASE_KEY  = 'sb_publishable_kPlxSvcRRkfXkJNt7lom0A_5NtXRAYE';
+const FASTAPI_URL   = 'https://techfest-canvas.onrender.com';
+const WIDTH         = 200;
+const HEIGHT        = 200;
+const COOLDOWN_MS   = 30000;
+
+const PALETTE = [
+  '#ffffff','#000000','#808080','#c0c0c0',
+  '#ff0000','#800000','#ff6600','#ff8c00',
+  '#ffff00','#808000','#00ff00','#008000',
+  '#00ffff','#008080','#0000ff','#000080',
+  '#ff00ff','#800080','#ff69b4','#ff1493',
+  '#ffd700','#7cfc00','#00fa9a','#00bfff',
+  '#1e90ff','#9370db','#4b0082','#ff4500',
+  '#2f4f4f','#8b4513','#228b22','#dc143c'
+];
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let festCode = null;
+let userName = null;
+let selectedColor = 1; // black default
+let cooldownEnd = 0;
+let cooldownInterval = null;
+let scale = 3, offsetX = 0, offsetY = 0;
+let isDragging = false, dragStart = { x: 0, y: 0 };
+
+const canvasEl = document.getElementById('canvas');
+const ctx = canvasEl.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+canvasEl.width = WIDTH;
+canvasEl.height = HEIGHT;
+ctx.fillStyle = '#ffffff';
+ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+// ── BOOT ──
+window.addEventListener('load', async () => {
+  buildPalette();
+  await loadCanvas();
+  subscribeRealtime();
+  document.getElementById('loading').style.display = 'none';
+  showScreen('screen-auth');
+});
+
+// ── SCREENS ──
+function showScreen(id) {
+  ['screen-auth','screen-register','screen-login'].forEach(s => {
+    document.getElementById(s).style.display = 'none';
+  });
+  if (id) document.getElementById(id).style.display = 'flex';
+}
+
+function hideAllScreens() {
+  ['screen-auth','screen-register','screen-login'].forEach(s => {
+    document.getElementById(s).style.display = 'none';
+  });
+}
+
+// ── REGISTER ──
+document.getElementById('reg-name').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('reg-phone').focus(); });
+document.getElementById('reg-phone').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('reg-college').focus(); });
+document.getElementById('reg-college').addEventListener('keydown', e => { if(e.key==='Enter') doRegister(); });
+
+async function doRegister() {
+  const name    = document.getElementById('reg-name').value.trim();
+  const phone   = document.getElementById('reg-phone').value.trim();
+  const college = document.getElementById('reg-college').value.trim();
+  const errEl   = document.getElementById('reg-error');
+
+  if (!name || !phone || !college) {
+    errEl.textContent = 'Please fill in all fields.';
+    errEl.style.display = 'block'; return;
+  }
+
+  const btn = document.getElementById('reg-btn');
+  btn.textContent = 'Registering...'; btn.disabled = true;
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch(FASTAPI_URL + '/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, college })
+    });
+    const data = await res.json();
+
+    document.getElementById('reg-code').textContent = data.fest_code;
+    document.getElementById('reg-success').style.display = 'block';
+    btn.style.display = 'none';
+
+  } catch(e) {
+    errEl.textContent = 'Server error. Please try again.';
+    errEl.style.display = 'block';
+    btn.textContent = 'Register & Get My Fest ID';
+    btn.disabled = false;
+  }
+}
+
+function enterWithCode(code) {
+  festCode = code;
+  document.getElementById('user-badge').textContent = '👤 ' + (document.getElementById('reg-name').value.trim() || code);
+  hideAllScreens();
+  resetZoom();
+}
+
+// ── LOGIN ──
+document.getElementById('login-code').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+async function doLogin() {
+  const code  = document.getElementById('login-code').value.trim().toUpperCase();
+  const errEl = document.getElementById('login-error');
+  if (!code) { errEl.textContent = 'Please enter your Fest ID.'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('login-btn');
+  btn.textContent = 'Checking...'; btn.disabled = true;
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch(FASTAPI_URL + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fest_code: code })
+    });
+
+    if (res.status === 401) {
+      errEl.textContent = 'Invalid Fest ID. Please check and try again.';
+      errEl.style.display = 'block';
+      btn.textContent = 'Enter Canvas'; btn.disabled = false;
+      return;
+    }
+
+    const data = await res.json();
+    festCode = data.fest_code;
+    userName = data.name;
+    document.getElementById('user-badge').textContent = '👤 ' + userName;
+    hideAllScreens();
+    resetZoom();
+
+    // Check existing cooldown
+    const { data: p } = await sb.from('participants').select('last_pixel_at').eq('fest_code', festCode).single();
+    if (p && p.last_pixel_at) {
+      const remaining = COOLDOWN_MS - (Date.now() - new Date(p.last_pixel_at).getTime());
+      if (remaining > 0) startCooldown(remaining);
+    }
+
+  } catch(e) {
+    errEl.textContent = 'Could not connect. Try again.';
+    errEl.style.display = 'block';
+    btn.textContent = 'Enter Canvas'; btn.disabled = false;
+  }
+}
+
+// ── LOAD CANVAS ──
+async function loadCanvas() {
+  document.getElementById('loading-text').textContent = 'Loading canvas pixels...';
+  const { data } = await sb.from('pixels').select('x,y,color');
+  if (data) {
+    for (const px of data) {
+      ctx.fillStyle = px.color;
+      ctx.fillRect(px.x, px.y, 1, 1);
+    }
+  }
+}
+
+// ── REALTIME ──
+function subscribeRealtime() {
+  sb.channel('canvas-pixels')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pixels' }, (payload) => {
+      if (payload.new && payload.new.x !== undefined) {
+        ctx.fillStyle = payload.new.color;
+        ctx.fillRect(payload.new.x, payload.new.y, 1, 1);
+      }
+    })
+    .subscribe();
+}
+
+// ── PLACE PIXEL ──
+async function placePixel(x, y) {
+  if (!festCode) { showToast('Please log in first!'); showScreen('screen-auth'); return; }
+  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
+
+  const now = Date.now();
+  if (now < cooldownEnd) {
+    showToast(`⏱ Wait ${Math.ceil((cooldownEnd - now)/1000)}s before placing again`);
+    return;
+  }
+
+  const color = PALETTE[selectedColor];
+
+  // Optimistic draw
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 1, 1);
+
+  // Check server-side cooldown
+  const { data: p } = await sb.from('participants').select('last_pixel_at').eq('fest_code', festCode).single();
+  if (p && p.last_pixel_at) {
+    const remaining = COOLDOWN_MS - (Date.now() - new Date(p.last_pixel_at).getTime());
+    if (remaining > 0) {
+      // Revert
+      const { data: existing } = await sb.from('pixels').select('color').eq('x', x).eq('y', y).maybeSingle();
+      ctx.fillStyle = existing ? existing.color : '#ffffff';
+      ctx.fillRect(x, y, 1, 1);
+      startCooldown(remaining);
+      showToast(`⏱ Wait ${Math.ceil(remaining/1000)}s before placing again`);
+      return;
+    }
+  }
+
+  // Save pixel
+  const { error } = await sb.from('pixels').upsert({ x, y, color, placed_by: festCode }, { onConflict: 'x,y' });
+  if (error) { showToast('Failed to place pixel. Try again.'); return; }
+
+  // Update cooldown timestamp
+  await sb.from('participants').update({ last_pixel_at: new Date().toISOString() }).eq('fest_code', festCode);
+
+  startCooldown(COOLDOWN_MS);
+}
+
+// ── PALETTE ──
+function buildPalette() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.querySelectorAll('.swatch').forEach(s => s.remove());
+  PALETTE.forEach((color, i) => {
+    const s = document.createElement('div');
+    s.className = 'swatch' + (i === selectedColor ? ' selected' : '');
+    s.style.background = color;
+    s.title = color;
+    s.onclick = () => {
+      selectedColor = i;
+      document.querySelectorAll('.swatch').forEach((sw, j) => sw.classList.toggle('selected', j === i));
+    };
+    sidebar.appendChild(s);
+  });
+}
+
+// ── COOLDOWN ──
+function startCooldown(ms) {
+  cooldownEnd = Date.now() + ms;
+  const el = document.getElementById('cooldown-display');
+  if (cooldownInterval) clearInterval(cooldownInterval);
+  cooldownInterval = setInterval(() => {
+    const rem = cooldownEnd - Date.now();
+    if (rem <= 0) {
+      el.textContent = '✓ READY'; el.className = 'ready';
+      clearInterval(cooldownInterval);
+    } else {
+      el.textContent = `⏱ ${Math.ceil(rem/1000)}s`; el.className = '';
+    }
+  }, 100);
+}
+
+// ── CANVAS CONTROLS ──
+function getPos(cx, cy) {
+  const r = wrap.getBoundingClientRect();
+  return { x: Math.floor((cx - r.left - offsetX) / scale), y: Math.floor((cy - r.top - offsetY) / scale) };
+}
+
+wrap.addEventListener('mousedown', e => {
+  isDragging = false;
+  dragStart = { x: e.clientX - offsetX, y: e.clientY - offsetY };
+});
+
+wrap.addEventListener('mousemove', e => {
+  const p = getPos(e.clientX, e.clientY);
+  document.getElementById('hover-info').textContent = `x: ${p.x}  y: ${p.y}`;
+  if (e.buttons === 1) {
+    const dx = e.clientX - dragStart.x - offsetX;
+    const dy = e.clientY - dragStart.y - offsetY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isDragging = true;
+    offsetX = e.clientX - dragStart.x;
+    offsetY = e.clientY - dragStart.y;
+    updateTransform();
+  }
+});
+
+wrap.addEventListener('mouseup', e => {
+  if (!isDragging) { const p = getPos(e.clientX, e.clientY); placePixel(p.x, p.y); }
+  isDragging = false;
+});
+
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.15 : 1/1.15;
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  offsetX = mx - (mx - offsetX) * f;
+  offsetY = my - (my - offsetY) * f;
+  scale = Math.max(1, Math.min(40, scale * f));
+  updateTransform();
+}, { passive: false });
+
+let lastDist = 0;
+wrap.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) { dragStart = { x: e.touches[0].clientX - offsetX, y: e.touches[0].clientY - offsetY }; isDragging = false; }
+  else if (e.touches.length === 2) lastDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+}, { passive: true });
+
+wrap.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    const dx = e.touches[0].clientX - dragStart.x - offsetX;
+    const dy = e.touches[0].clientY - dragStart.y - offsetY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isDragging = true;
+    offsetX = e.touches[0].clientX - dragStart.x;
+    offsetY = e.touches[0].clientY - dragStart.y;
+    updateTransform();
+  } else if (e.touches.length === 2) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    scale = Math.max(1, Math.min(40, scale * d / lastDist));
+    lastDist = d; updateTransform();
+  }
+}, { passive: false });
+
+wrap.addEventListener('touchend', e => {
+  if (!isDragging && e.changedTouches.length === 1) {
+    const p = getPos(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    placePixel(p.x, p.y);
+  }
+  isDragging = false;
+}, { passive: true });
+
+function updateTransform() { canvasEl.style.transform = `translate(${offsetX}px,${offsetY}px) scale(${scale})`; }
+
+function zoom(f) {
+  const r = wrap.getBoundingClientRect();
+  const cx = r.width/2, cy = r.height/2;
+  offsetX = cx - (cx - offsetX) * f;
+  offsetY = cy - (cy - offsetY) * f;
+  scale = Math.max(1, Math.min(40, scale * f));
+  updateTransform();
+}
+
+function resetZoom() {
+  const r = wrap.getBoundingClientRect();
+  scale = Math.min(r.width / WIDTH, r.height / HEIGHT) * 0.9;
+  offsetX = (r.width  - WIDTH  * scale) / 2;
+  offsetY = (r.height - HEIGHT * scale) / 2;
+  updateTransform();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
